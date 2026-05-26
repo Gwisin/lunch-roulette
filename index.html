@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>점심 메뉴 룰렛</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&family=Black+Han+Sans&display=swap');
+
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --red: #E53935;
+    --red-dark: #C62828;
+    --bg: #FFF8F0;
+    --ink: #1A1A1A;
+    --muted: #888;
+    --border: #DDD;
+    --panel-shadow: 3px 3px 0 #1A1A1A;
+  }
+
+  html, body {
+    width: 100%; min-height: 100vh;
+    background: var(--bg);
+    font-family: 'Nanum Gothic', sans-serif;
+    color: var(--ink);
+  }
+
+  body {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 28px 16px 56px;
+    gap: 0;
+  }
+
+  h1 {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 13px; color: var(--muted); margin-bottom: 28px;
+  }
+
+  /* ── 레이아웃: 가로 → 세로 전환 ── */
+  .layout {
+    display: flex;
+    flex-direction: row;
+    gap: 36px;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  /* 태블릿/모바일: 세로 배치 */
+  @media (max-width: 700px) {
+    .layout { flex-direction: column; align-items: center; gap: 24px; }
+  }
+
+  /* ── 룰렛 영역 ── */
+  .roulette-side {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 18px;
+    flex-shrink: 0;
+  }
+
+  .wheel-wrapper {
+    position: relative;
+    /* 크기는 JS에서 동적으로 설정 */
+  }
+
+  .pointer {
+    position: absolute; top: -16px; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 13px solid transparent;
+    border-right: 13px solid transparent;
+    border-top: 32px solid var(--red);
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.35));
+    z-index: 20;
+  }
+
+  #wheel {
+    display: block;
+    border-radius: 50%;
+    filter: drop-shadow(0 6px 20px rgba(0,0,0,0.15));
+  }
+
+  .wheel-center {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    background: #fff; border-radius: 50%;
+    border: 4px solid var(--ink);
+    z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    /* 크기는 JS에서 */
+  }
+
+  .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+  .spin-btn {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(1rem, 3vw, 1.15rem);
+    letter-spacing: 1px;
+    color: #fff; background: var(--red); border: none; border-radius: 50px;
+    padding: 13px 40px; cursor: pointer;
+    transition: background .15s, transform .1s;
+    box-shadow: 0 4px 16px rgba(229,57,53,.35);
+    white-space: nowrap;
+  }
+  .spin-btn:hover:not(:disabled) { background: var(--red-dark); transform: scale(1.03); }
+  .spin-btn:active:not(:disabled) { transform: scale(0.97); }
+  .spin-btn:disabled { background: #BDBDBD; cursor: not-allowed; box-shadow: none; }
+
+  .reset-btn {
+    font-family: 'Nanum Gothic', sans-serif; font-weight: 800; font-size: 13px;
+    color: var(--muted); background: #fff;
+    border: 1.5px solid var(--border); border-radius: 50px;
+    padding: 13px 18px; cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .reset-btn:hover { border-color: var(--red); color: var(--red); background: #FFF0F0; }
+
+  .result-box {
+    min-height: 50px; display: flex; align-items: center; justify-content: center;
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+    color: var(--ink); background: #fff;
+    border: 2px solid var(--ink); border-radius: 14px;
+    padding: 10px 28px;
+    width: 100%; max-width: 360px;
+    text-align: center;
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  .result-box.winner { animation: pop .4s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes pop { 0%{transform:scale(.8)} 100%{transform:scale(1)} }
+
+  /* ── 메뉴 패널 ── */
+  .menu-side {
+    display: flex; flex-direction: column; gap: 14px;
+    width: 100%;
+    max-width: 300px;
+    min-width: 220px;
+  }
+
+  @media (max-width: 700px) {
+    .menu-side { max-width: 100%; min-width: unset; }
+  }
+
+  .panel {
+    background: #fff; border: 1.5px solid var(--ink);
+    border-radius: 16px; padding: 18px;
+    box-shadow: var(--panel-shadow);
+  }
+
+  .panel-title {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 11px;
+  }
+
+  .input-row { display: flex; gap: 8px; }
+
+  .menu-input {
+    flex: 1; font-family: 'Nanum Gothic', sans-serif; font-size: 14px;
+    padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    outline: none; background: #FAFAFA; color: var(--ink);
+    transition: border-color .15s;
+  }
+  .menu-input:focus { border-color: var(--red); background: #fff; }
+
+  .add-btn {
+    font-weight: 800; font-size: 20px; color: #fff; background: var(--ink);
+    border: none; border-radius: 8px; width: 38px; height: 38px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .15s; flex-shrink: 0;
+  }
+  .add-btn:hover { background: var(--red); }
+
+  .count-badge { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-align: right; }
+
+  .menu-list {
+    list-style: none; display: flex; flex-direction: column; gap: 5px;
+    max-height: 240px; overflow-y: auto;
+  }
+  .menu-list::-webkit-scrollbar { width: 4px; }
+  .menu-list::-webkit-scrollbar-thumb { background: #DDD; border-radius: 4px; }
+
+  .menu-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 8px;
+    font-size: 14px; background: #FAFAFA; border: 1px solid #EEE;
+  }
+  .color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .menu-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .del-btn {
+    background: none; border: none; cursor: pointer;
+    color: #BDBDBD; font-size: 18px; padding: 0 2px; line-height: 1;
+    transition: color .1s;
+  }
+  .del-btn:hover { color: var(--red); }
+
+  .empty-msg { font-size: 13px; color: #BBB; text-align: center; padding: 14px 0; }
+
+  .btn-group { display: flex; flex-direction: column; gap: 8px; }
+
+  .action-btn {
+    font-family: 'Nanum Gothic', sans-serif; font-weight: 800; font-size: 13px;
+    color: var(--ink); background: #FFF8F0; border: 1.5px solid var(--ink);
+    border-radius: 10px; padding: 10px 0; width: 100%;
+    cursor: pointer; transition: background .15s; letter-spacing: .3px;
+  }
+  .action-btn:hover { background: #FFE0CC; }
+  .action-btn.danger { color: var(--red); background: #FFF0F0; border-color: var(--red); }
+  .action-btn.danger:hover { background: #FFD6D6; }
+</style>
+</head>
+<body>
+
+<h1>🍱 점심 메뉴 룰렛</h1>
+<p class="subtitle">오늘 뭐 먹지? 운명에 맡겨보세요</p>
+
+<div class="layout">
+
+  <div class="roulette-side">
+    <div class="wheel-wrapper" id="wheelWrapper">
+      <div class="pointer"></div>
+      <canvas id="wheel"></canvas>
+      <div class="wheel-center" id="wheelCenter">🎯</div>
+    </div>
+    <div class="btn-row">
+      <button class="spin-btn" id="spinBtn" onclick="spin()">메뉴 선택!</button>
+      <button class="reset-btn" id="resetBtn" onclick="resetResult()">↺ 초기화</button>
+    </div>
+    <div class="result-box" id="resultBox">여기에 결과가 나와요</div>
+  </div>
+
+  <div class="menu-side">
+    <div class="panel">
+      <div class="panel-title">메뉴 추가</div>
+      <div class="input-row">
+        <input class="menu-input" id="menuInput" type="text"
+          placeholder="메뉴 이름 입력..." maxlength="12"
+          onkeydown="if(event.key==='Enter')addMenu()">
+        <button class="add-btn" onclick="addMenu()">+</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">메뉴 목록</div>
+      <div class="count-badge" id="countBadge">0개</div>
+      <ul class="menu-list" id="menuList"></ul>
+    </div>
+
+    <div class="btn-group">
+      <button class="action-btn" id="shuffleBtn" onclick="shuffleMenus()">🔀 메뉴 순서 랜덤 배치</button>
+      <button class="action-btn danger" onclick="clearAllMenus()">🗑 메뉴 전체 삭제</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════
+   설계 원칙
+   • spinDeg=0 → 섹터0 중앙이 12시
+   • 원판 회전: ctx.rotate(spinDeg) 한 번
+   • 결과 읽기: 멈춘 뒤 포인터(12시) 가 실제로 가리키는 칸을 직접 계산
+   ════════════════════════════════════════════════════ */
+
+const COLORS = [
+  '#FF6B6B','#FFA94D','#FFD43B','#69DB7C',
+  '#4DABF7','#9775FA','#F783AC','#63E6BE',
+  '#FF8787','#74C0FC','#A9E34B','#FFC078',
+  '#DA77F2','#38D9A9','#FF6B9D','#66D9E8'
+];
+
+const STORAGE_KEY = 'lunchRoulette_menus';
+const DEFAULT_MENUS = ['김치찌개','된장찌개','비빔밥','순대국밥','삼겹살','초밥','짜장면','파스타'];
+
+function loadMenus(){
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if(s){ const p=JSON.parse(s); if(Array.isArray(p)&&p.length>0) return p; }
+  } catch(e){}
+  return [...DEFAULT_MENUS];
+}
+function saveMenus(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(menus)); }catch(e){}
+}
+
+let menus    = loadMenus();
+let spinDeg  = 0;
+let spinning = false;
+let WHEEL_SIZE = 400;   // 실제 캔버스 픽셀 크기 (JS가 계산)
+
+function getColor(i){ return COLORS[i % COLORS.length]; }
+
+/* ── 반응형: 화면 너비에 따라 원판 크기 결정 ── */
+function calcWheelSize(){
+  const vw = window.innerWidth;
+  if(vw >= 900) return 420;
+  if(vw >= 700) return 360;
+  // 모바일: 화면 너비의 88%, 최소 260, 최대 360
+  return Math.max(260, Math.min(360, Math.floor(vw * 0.88)));
+}
+
+function applyWheelSize(){
+  WHEEL_SIZE = calcWheelSize();
+  const canvas = document.getElementById('wheel');
+  const wrapper = document.getElementById('wheelWrapper');
+  const center  = document.getElementById('wheelCenter');
+  const centerSz = Math.round(WHEEL_SIZE * 0.12);
+
+  canvas.width  = WHEEL_SIZE;
+  canvas.height = WHEEL_SIZE;
+  canvas.style.width  = WHEEL_SIZE + 'px';
+  canvas.style.height = WHEEL_SIZE + 'px';
+
+  wrapper.style.width  = WHEEL_SIZE + 'px';
+  wrapper.style.height = WHEEL_SIZE + 'px';
+
+  center.style.width     = centerSz + 'px';
+  center.style.height    = centerSz + 'px';
+  center.style.fontSize  = Math.round(centerSz * 0.45) + 'px';
+
+  // result-box 도 원판 너비에 맞춤
+  document.getElementById('resultBox').style.maxWidth = WHEEL_SIZE + 'px';
+}
+
+/* ── 원판 그리기 ── */
+function drawWheel(){
+  const canvas = document.getElementById('wheel');
+  const ctx    = canvas.getContext('2d');
+  const S  = canvas.width;
+  const cx = S/2, cy = S/2, r = S/2 - 3;
+
+  ctx.clearRect(0,0,S,S);
+
+  if(menus.length === 0){
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.fillStyle='#EEE'; ctx.fill();
+    ctx.strokeStyle='#CCC'; ctx.lineWidth=3; ctx.stroke();
+    ctx.fillStyle='#999';
+    ctx.font=`bold ${Math.round(S*0.045)}px "Nanum Gothic",sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('메뉴를 추가해주세요', cx, cy);
+    return;
+  }
+
+  const n     = menus.length;
+  const slice = 360 / n;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(spinDeg * Math.PI / 180);
+
+  menus.forEach((menu, i) => {
+    const startDeg = -90 - slice/2 + slice * i;
+    const endDeg   = startDeg + slice;
+    const midDeg   = startDeg + slice/2;
+    const startRad = startDeg * Math.PI/180;
+    const endRad   = endDeg   * Math.PI/180;
+    const midRad   = midDeg   * Math.PI/180;
+
+    // 섹터
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,r,startRad,endRad);
+    ctx.closePath();
+    ctx.fillStyle = getColor(i);
+    ctx.fill();
+
+    // 구분선
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,r,startRad,endRad);
+    ctx.closePath();
+    ctx.strokeStyle='rgba(255,255,255,0.65)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+
+    // ── 텍스트: 크기·위치 모두 캔버스 크기 비례 ──
+    ctx.save();
+    ctx.rotate(midRad);
+
+    // 글씨 크기: 캔버스 크기 × 비율, 메뉴 수 많을수록 약간 작게
+    const basePct = n <= 4  ? 0.075
+                  : n <= 6  ? 0.065
+                  : n <= 8  ? 0.058
+                  : n <= 10 ? 0.052
+                  :           0.046;
+    const fs = Math.max(11, Math.round(S * basePct));
+
+    ctx.font = `bold ${fs}px "Nanum Gothic",sans-serif`;
+    ctx.textAlign    = 'right';
+    ctx.textBaseline = 'middle';
+
+    // 텍스트 배치 반경: 바깥쪽 (중심~가장자리의 75%)
+    const textR = r * 0.76;
+    const maxW  = textR * 0.70;
+
+    let label = menu;
+    while(ctx.measureText(label).width > maxW && label.length > 2)
+      label = label.slice(0,-1);
+    if(label !== menu) label = label.slice(0,-1) + '..';
+
+    // 외곽선으로 가독성 향상
+    ctx.lineWidth = Math.max(2, fs * 0.22);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineJoin = 'round';
+    ctx.strokeText(label, textR, 0);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillText(label, textR, 0);
+
+    ctx.restore();
+  });
+
+  ctx.restore();
+
+  // 바깥 테두리
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle = '#1A1A1A'; ctx.lineWidth = 4; ctx.stroke();
+}
+
+/* ── 메뉴 목록 ── */
+function renderMenuList(){
+  const ul    = document.getElementById('menuList');
+  const badge = document.getElementById('countBadge');
+  badge.textContent = menus.length + '개';
+  if(menus.length === 0){
+    ul.innerHTML='<li class="empty-msg">메뉴를 추가해주세요</li>';
+    return;
+  }
+  ul.innerHTML = menus.map((m,i)=>`
+    <li class="menu-item">
+      <span class="color-dot" style="background:${getColor(i)}"></span>
+      <span class="menu-name">${esc(m)}</span>
+      <button class="del-btn" onclick="removeMenu(${i})">×</button>
+    </li>`).join('');
+}
+
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function update(){ drawWheel(); renderMenuList(); }
+
+/* ── 메뉴 조작 ── */
+function addMenu(){
+  const inp = document.getElementById('menuInput');
+  const val = inp.value.trim();
+  if(!val) return;
+  if(menus.includes(val)){ inp.select(); return; }
+  if(menus.length >= 16){ alert('최대 16개까지 추가할 수 있어요!'); return; }
+  menus.push(val);
+  inp.value=''; inp.focus();
+  saveMenus(); update();
+}
+
+function removeMenu(i){
+  menus.splice(i,1);
+  saveMenus(); update();
+}
+
+function shuffleMenus(){
+  for(let i=menus.length-1; i>0; i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [menus[i],menus[j]]=[menus[j],menus[i]];
+  }
+  spinDeg=0;
+  saveMenus(); update();
+  const btn=document.getElementById('shuffleBtn');
+  btn.textContent='✅ 순서 변경됨!';
+  setTimeout(()=>btn.textContent='🔀 메뉴 순서 랜덤 배치',900);
+}
+
+function clearAllMenus(){
+  if(menus.length===0) return;
+  if(!confirm('메뉴를 전체 삭제할까요?')) return;
+  menus=[]; spinDeg=0;
+  saveMenus(); resetResult(); update();
+}
+
+function resetResult(){
+  const box=document.getElementById('resultBox');
+  box.className='result-box';
+  box.textContent='여기에 결과가 나와요';
+}
+
+/* ── 포인터가 실제로 가리키는 칸 읽기 ──
+   섹터 i 원판 내부 범위: s = (-90 - slice/2 + slice*i) mod 360
+   포인터 원판 내부 각도: ptr = (-90 - spinDeg) mod 360              */
+function getWinnerIdx(){
+  const n=menus.length, slice=360/n;
+  const ptr=((-90-spinDeg)%360+360)%360;
+  for(let i=0;i<n;i++){
+    const s=((-90-slice/2+slice*i)%360+360)%360;
+    const e=(s+slice)%360;
+    if(s<e){ if(ptr>=s&&ptr<e) return i; }
+    else   { if(ptr>=s||ptr<e) return i; }
+  }
+  return 0;
+}
+
+/* ── 스핀 ── */
+function spin(){
+  if(spinning||menus.length===0) return;
+  spinning=true;
+  document.getElementById('spinBtn').disabled=true;
+  document.getElementById('resetBtn').disabled=true;
+
+  const box=document.getElementById('resultBox');
+  box.className='result-box';
+  box.textContent='돌아가는 중...';
+
+  // 순수 랜덤 각도 (5~8바퀴 + 랜덤 나머지)
+  const delta=360*(5+Math.random()*3)+Math.random()*360;
+  const startDeg=spinDeg;
+  const duration=5000;
+  const startTime=performance.now();
+
+  function easeOut(t){ return 1-Math.pow(1-t,4); }
+
+  function animate(now){
+    const t=Math.min((now-startTime)/duration,1);
+    spinDeg=startDeg+delta*easeOut(t);
+    drawWheel();
+    if(t<1){
+      requestAnimationFrame(animate);
+    } else {
+      spinDeg=startDeg+delta;
+      drawWheel();
+      spinning=false;
+      document.getElementById('spinBtn').disabled=false;
+      document.getElementById('resetBtn').disabled=false;
+      const idx=getWinnerIdx();
+      box.textContent='🎉 '+menus[idx]+'!';
+      box.className='result-box winner';
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+/* ── 반응형: resize 시 원판 재그리기 ── */
+let resizeTimer;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(()=>{ applyWheelSize(); drawWheel(); }, 120);
+});
+
+/* ── 초기화 ── */
+applyWheelSize();
+update();
+</script>
+</body>
+</html>
